@@ -360,13 +360,17 @@ export default function OAuthModal({ isOpen, provider, providerInfo, onSuccess, 
       }
 
       // Authorization code flow - build redirect URI (some providers require fixed ports)
-      const appPort = window.location.port || (window.location.protocol === "https:" ? "443" : "80");
       let redirectUri;
       if (provider === "codex") {
         redirectUri = "http://localhost:1455/auth/callback";
       } else if (provider === "xai") {
         redirectUri = "http://127.0.0.1:56121/callback";
+      } else if (!isLocalhost) {
+        // When running on Cloud / remote domain:
+        // Google/OAuth providers require loopback redirect_uri. Use standard 9router port 20128
+        redirectUri = "http://localhost:20128/callback";
       } else {
+        const appPort = window.location.port || "20128";
         redirectUri = `http://localhost:${appPort}/callback`;
       }
 
@@ -715,14 +719,34 @@ export default function OAuthModal({ isOpen, provider, providerInfo, onSuccess, 
         return;
       }
 
-      const url = new URL(input);
-      const code = url.searchParams.get("code");
-      const token = url.searchParams.get("token");
-      const state = url.searchParams.get("state");
-      const errorParam = url.searchParams.get("error");
+      let code = null;
+      let token = null;
+      let state = null;
+      let errorParam = null;
 
-      if (errorParam) {
-        throw new Error(url.searchParams.get("error_description") || errorParam);
+      try {
+        const parseable = input.startsWith("http://") || input.startsWith("https://") ? input : `http://${input}`;
+        const url = new URL(parseable);
+        code = url.searchParams.get("code");
+        token = url.searchParams.get("token");
+        state = url.searchParams.get("state");
+        errorParam = url.searchParams.get("error");
+        if (errorParam) {
+          throw new Error(url.searchParams.get("error_description") || errorParam);
+        }
+      } catch (e) {
+        if (e.message && !e.message.includes("Invalid URL")) throw e;
+      }
+
+      if (!code && !token) {
+        const codeMatch = input.match(/[?&]code=([^&]+)/);
+        if (codeMatch) {
+          code = decodeURIComponent(codeMatch[1]);
+          const stateMatch = input.match(/[?&]state=([^&]+)/);
+          if (stateMatch) state = decodeURIComponent(stateMatch[1]);
+        } else if (!input.includes("/") && !input.includes("?") && !input.includes(" ")) {
+          code = input;
+        }
       }
 
       if (!code && !token) {

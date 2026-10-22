@@ -1,0 +1,25 @@
+services:
+  - type: web
+    name: 9router
+    env: docker
+    plan: free
+    region: singapore
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /dashboard
+    envVars:
+      - key: PORT
+        value: 20128
+      - key: HOSTNAME
+        value: 0.0.0.0
+      - key: DATA_DIR
+        value: /app/data
+      - key: NODE_ENV
+        value: production
+      - key: INITIAL_PASSWORD
+        value: 123456
+      - key: JWT_SECRET
+        generateValue: true
+      - key: API_KEY_SECRET
+        generateValue: true
+      - key: MACHINE_ID_SALT
+        generateValue: true
