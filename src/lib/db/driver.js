@@ -4,6 +4,19 @@ import { ensureDirs, DATA_FILE } from "./paths.js";
 if (!global._dbAdapter) global._dbAdapter = { instance: null, initPromise: null, logged: false };
 const state = global._dbAdapter;
 
+async function tryTurso() {
+  const dbUrl = process.env.TURSO_DATABASE_URL;
+  const dbToken = process.env.TURSO_AUTH_TOKEN;
+  if (!dbUrl || !dbToken) return null;
+  try {
+    const { createTursoAdapter } = await import("./adapters/tursoAdapter.js");
+    return await createTursoAdapter(DATA_FILE, dbUrl, dbToken);
+  } catch (e) {
+    console.warn(`[DB] Turso adapter initialization failed: ${e.message}`);
+    return null;
+  }
+}
+
 async function tryBunSqlite() {
   // Bun runtime only — built-in, no install needed
   if (!process.versions.bun) return null;
@@ -59,9 +72,11 @@ async function trySqlJs() {
 async function initAdapter() {
   ensureDirs();
   // Order per runtime:
+  //   Turso (if configured via env TURSO_DATABASE_URL + TURSO_AUTH_TOKEN)
   //   Bun:  bun:sqlite → sql.js
   //   Node: better-sqlite3 → node:sqlite (≥22.5) → sql.js
-  let adapter = await tryBunSqlite();
+  let adapter = await tryTurso();
+  if (!adapter) adapter = await tryBunSqlite();
   if (!adapter) adapter = await tryBetterSqlite();
   if (!adapter) adapter = await tryNodeSqlite();
   if (!adapter) adapter = await trySqlJs();
